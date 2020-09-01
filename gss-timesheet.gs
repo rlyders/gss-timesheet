@@ -1,3 +1,9 @@
+/* 
+    Author: Richard@Lyders.com
+    Project: https://github.com/rlyders/gss-timesheet
+    Description: Google Script for Google Sheets timesheet 
+*/
+
 function hashSearch(array, searchText) {
   var hash = {};
   for (var i = 0; i < array.length; i++) {
@@ -105,7 +111,9 @@ function getWeekEndOnSunday(aDate) {
 }
 
 function addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount) {
-  if (endTime.getDay() != startTime.getDay()) {
+  var startDay = startTime.getDay();
+  var endDay = endTime.getDay();
+  if (startDay != endDay) {
     var newStartTime = new Date(endTime);
     newStartTime.setHours(0, 0, 0, 0);
     addWorkTime(tsData, project, workKey, notes, newStartTime, endTime, discount);
@@ -132,28 +140,39 @@ function createTimesheet() {
   var settingsValues = settingsSheet.getRange(1, 1, 2, 2).getValues();
   var timesheetEndOfWeek = settingsValues[1][1];
 
-  var sheet = ss.getSheetByName("timecop");
+  var sheet = ss.getSheetByName("Manual Time Log");
 
   var rangeData = sheet.getDataRange();
   var lastColumn = rangeData.getLastColumn();
-  var lastRow = rangeData.getLastRow();
+  var lastRow = getLastStartTimeRow();
   var searchRange = sheet.getRange(2, 1, lastRow - 1, lastColumn);
 
   var tsData = {};
 
   // Get array of values in the search Range
   var rangeValues = searchRange.getValues();
+  var startTimeColNum = 1;
+  var stopTimeColNum = 2;
+  var projectColNum = 5;
+  var workTypeColNum = 7;
+  var notesColNum = 9;
+  var notesColNum = 9;
+  var discountColNum = 17;
+  var trimAfterSpaceInProject = false;
+  
   for (r = 0; r < lastRow - 1; r++) {
-    var project = rangeValues[r][1];
-    var spaceInProject = project.indexOf(' ');
-    if (spaceInProject > 0) {
-      project = project.substring(0, spaceInProject);
+    var project = rangeValues[r][projectColNum-1];
+    if (trimAfterSpaceInProject) {
+     var spaceInProject = project.indexOf(' ');
+     if (spaceInProject > 0) {
+       project = project.substring(0, spaceInProject);
+     }
     }
-    var workKey = rangeValues[r][2];
-    var notes = rangeValues[r][3];
-    var startTime = convert2jsDate(rangeValues[r][4]);
-    var endTime = convert2jsDate(rangeValues[r][5]);
-    var discount = rangeValues[r][7];
+    var workKey = rangeValues[r][workTypeColNum-1];
+    var notes = rangeValues[r][notesColNum-1];
+    var startTime = rangeValues[r][startTimeColNum-1];
+    var endTime = rangeValues[r][stopTimeColNum-1];
+    var discount = rangeValues[r][discountColNum-1];
 
     addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount);
   };
@@ -285,7 +304,8 @@ function createTimeSheetArray(tsData, timesheetEndOfWeek) {
         var colIdx = 0;
         var rowCells = [];
         rowCells[colIdx++] = project;
-        rowCells[colIdx++] = getMapValue( workKeyMap, workType );
+          var mappedWorkType = getMapValue( workKeyMap, workType );
+          rowCells[colIdx++] = mappedWorkType == null ? workType: mappedWorkType;
 
         var workTypeData = projectData[workType];
         var notes = "";
@@ -439,14 +459,22 @@ function testWeekNum() {
   var weekNum = getWeekNumStartOnMon(date);
   console.log("weekNum=" + weekNum);
 }
-          
+
 function getLastStartTimeRow() {
           var sheet = SpreadsheetApp.getActiveSheet();
-          var lastStartTimeRow = sheet.getLastRow();
-          for (; lastStartTimeRow>1 && sheet.getRange("A"+(lastStartTimeRow)).isBlank(); lastStartTimeRow--);
+          var lastStartTimeRow = sheet.getCurrentCell().getRow();
+          // move down as long as the current previous is not empty
+          while (!sheet.getRange("A"+(lastStartTimeRow+1)).isBlank()) {
+              lastStartTimeRow++;
+         }
+          // move up as long as the previous cell is empty
+          while (sheet.getRange("A"+(lastStartTimeRow)).isBlank()) {
+              lastStartTimeRow--;
+         }
+          sheet.setActiveRange(sheet.getRange("A"+lastStartTimeRow));
           return lastStartTimeRow;
 }
-          
+
 function startTime() {
           var updated = stopTime();
           var sheet = SpreadsheetApp.getActiveSheet();
