@@ -140,7 +140,7 @@ function createTimesheet() {
   var settingsValues = settingsSheet.getRange(1, 1, 2, 2).getValues();
   var timesheetEndOfWeek = settingsValues[1][1];
 
-  var sheet = ss.getSheetByName("Manual Time Log");
+  var sheet = ss.getSheetByName("Time Log");
 
   var rangeData = sheet.getDataRange();
   var lastColumn = rangeData.getLastColumn();
@@ -177,10 +177,14 @@ function createTimesheet() {
     addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount);
   };
 
+  var timeSheet = ss.getSheetByName("timesheet");
+
+  var jsonTimesheet = createJsonTimeSheet(tsData, timesheetEndOfWeek);
+  timeSheet.getRange("M1").setValue(jsonTimesheet);
+  
   var rows = createTimeSheetArray(tsData, timesheetEndOfWeek);
 
   var totCols = 11; // Week, Project, Work, Notes, Total Hours, Mon, Tue, Wed, Thu, Fri, Sat, Sun
-  var timeSheet = ss.getSheetByName("timesheet");
   timeSheet.getRange(1, 1, rows.length + 100, totCols + 50).clear();
 
   var range = timeSheet.getRange(1, 1, rows.length, totCols);
@@ -349,6 +353,80 @@ function createTimeSheetArray(tsData, timesheetEndOfWeek) {
   return rows;
 }
 
+class TimesheetRow {
+  constructor( project, workType, notes, totalHours, dayHours) {
+    this.project = project;
+    this.workType = workType;
+    this.notes = notes;
+    this.totalHours = totalHours;
+    this.dayHours = dayHours;
+  }
+  
+}
+
+class Timesheet {
+  constructor(timesheetEndOfWeek, tsData) {
+    this.endOfWeek = timesheetEndOfWeek;
+    this.rows = [];
+  
+  const workKeyMap = getWorkKeyMap();
+    
+  for (const endOfWeek in tsData) {
+    if (timesheetEndOfWeek != endOfWeek) {
+      continue;
+    }
+    for (const project in tsData[endOfWeek]) {
+      if (project == "personal") {
+        continue;
+      }
+      projectData = tsData[endOfWeek][project];
+      for (const workType in projectData) {
+        
+        var mappedWorkType = getMapValue( workKeyMap, workType );
+        mappedWorkType = mappedWorkType == null ? workType: mappedWorkType;
+
+        var workTypeData = projectData[mappedWorkType];
+        var notes = "";
+        for (const note in workTypeData.notes) {
+          if (notes.length > 0) {
+            notes = notes + "; ";
+          }
+          var noteMins = Math.round(workTypeData.notes[note]);
+          var timeStr = noteMins + "m";
+          if (noteMins > 60) {
+            var noteHrs = Math.trunc(noteMins / 60);
+            noteMins = noteMins - noteHrs * 60;
+            timeStr = noteHrs + "h " + noteMins + "m";
+          }
+          notes = notes + note + "[" + timeStr + "]";
+          if (notes.length > 400) {
+          notes = notes.substring(0,395) + "\u2026";
+         }
+        }
+
+        var totalRowHours = 0;
+        var dayHours = [];
+        for (const day in workTypeData.days) {
+          var mins = workTypeData.days[day];
+          mins = applyMinBlockOfTime(mins);
+          var hrs = +(mins / 60).toFixed(2);
+          totalRowHours = totalRowHours + hrs;
+          dayHours.push(hrs);
+        }
+        var timesheetRow = new TimesheetRow(project, mappedWorkType, notes, totalRowHours, dayHours);
+        this.rows.push(timesheetRow);
+      }
+    }
+   }
+  }
+}
+
+function createJsonTimeSheet(tsData, timesheetEndOfWeek) {
+  var timesheet = new Timesheet(timesheetEndOfWeek, tsData)
+  var jsonTimesheet = JSON.stringify(timesheet);
+  return jsonTimesheet;
+}
+
 function applyMinBlockOfTime(mins) {
   var minBlockOfMins = 15;
   mins = Math.round(mins / minBlockOfMins) * 15;
@@ -460,8 +538,12 @@ function testWeekNum() {
   console.log("weekNum=" + weekNum);
 }
 
+function getTimeLogSheet() {
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Time Log");
+}
+
 function getLastStartTimeRow() {
-          var sheet = SpreadsheetApp.getActiveSheet();
+          var sheet = getTimeLogSheet();
           var lastStartTimeRow = sheet.getCurrentCell().getRow();
           // move down as long as the current previous is not empty
           while (!sheet.getRange("A"+(lastStartTimeRow+1)).isBlank()) {
@@ -477,7 +559,7 @@ function getLastStartTimeRow() {
 
 function startTime() {
           var updated = stopTime();
-          var sheet = SpreadsheetApp.getActiveSheet();
+          var sheet = getTimeLogSheet();
           var newRowNum = getLastStartTimeRow() + 1;
           var newStartTimeRange = sheet.getRange("A"+newRowNum);
           if (updated) {
@@ -497,7 +579,7 @@ function startTime() {
 }
 
 function stopTime() {
-          var sheet = SpreadsheetApp.getActiveSheet();
+          var sheet = getTimeLogSheet();
           var currentTimerRow = getLastStartTimeRow();
           var newStopTimeRange = sheet.getRange("B"+currentTimerRow);
           var updated = recordCurrentTime(newStopTimeRange);
