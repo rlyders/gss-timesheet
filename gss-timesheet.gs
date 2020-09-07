@@ -177,10 +177,7 @@ function createTimesheet() {
     addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount);
   };
 
-  var timeSheet = ss.getSheetByName("timesheet");
-
-  var jsonTimesheet = createJsonTimeSheet(tsData, timesheetEndOfWeek);
-  timeSheet.getRange("M1").setValue(jsonTimesheet);
+  var timeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("timesheet");
   
   var rows = createTimeSheetArray(tsData, timesheetEndOfWeek);
 
@@ -228,6 +225,17 @@ function createTimesheet() {
   totalLabel.setBackground(darkBlue);
   totalLabel.setHorizontalAlignment("right")
 
+  var timesheetObj =  new Timesheet(timesheetEndOfWeek, tsData);
+  var file = saveJsonTimesheet(timesheetObj);
+  var fileUrl = file.getUrl();
+  // var url = DocsList.getFileById(file.getId()).getUrl();
+
+  var urlLabelRange = timeSheet.getRange("A1");
+  urlLabelRange.setValue("JSON: ");
+
+  var urlRange = timeSheet.getRange("B1");
+  urlRange.setValue(fileUrl);
+ 
 };
 
 // from: https://stackoverflow.com/a/33813783/5572674
@@ -421,12 +429,6 @@ class Timesheet {
   }
 }
 
-function createJsonTimeSheet(tsData, timesheetEndOfWeek) {
-  var timesheet = new Timesheet(timesheetEndOfWeek, tsData)
-  var jsonTimesheet = JSON.stringify(timesheet);
-  return jsonTimesheet;
-}
-
 function applyMinBlockOfTime(mins) {
   var minBlockOfMins = 15;
   mins = Math.round(mins / minBlockOfMins) * 15;
@@ -595,3 +597,26 @@ function recordCurrentTime(cell) {
           return updated;
 }
           // test();
+
+function saveData(folder, fileName, contents) {
+
+  var children = folder.getFilesByName(fileName);
+  var file = null;
+  if (children.hasNext()) {
+    file = children.next();
+    file.setContent(contents);
+    return file;
+  } else {
+    file = folder.createFile(fileName, contents);
+    return file;
+  }
+}
+
+function saveJsonTimesheet(timesheetObj) {
+  var fileName = "Timesheet-"+timesheetObj.endOfWeek.getFullYear()+"-"+(timesheetObj.endOfWeek.getMonth()+1)+"-"+timesheetObj.endOfWeek.getDate()+".json"
+  var folder = DriveApp.getFolderById("1PLmKRCtQja-mI2R7-wjiCaB-XiMYl-te");
+  if (folder != null) {
+    return saveData(folder, fileName, JSON.stringify(timesheetObj));
+  }
+
+}
