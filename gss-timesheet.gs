@@ -177,9 +177,11 @@ function createTimesheet() {
     addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount);
   };
 
+  var timesheetObj =  new Timesheet(timesheetEndOfWeek, tsData);
+
   var timeSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("timesheet");
   
-  var rows = createTimeSheetArray(tsData, timesheetEndOfWeek);
+  var rows = createTimeSheetArray(timesheetObj);
 
   var totCols = 11; // Week, Project, Work, Notes, Total Hours, Mon, Tue, Wed, Thu, Fri, Sat, Sun
   timeSheet.getRange(1, 1, rows.length + 100, totCols + 50).clear();
@@ -225,7 +227,6 @@ function createTimesheet() {
   totalLabel.setBackground(darkBlue);
   totalLabel.setHorizontalAlignment("right")
 
-  var timesheetObj =  new Timesheet(timesheetEndOfWeek, tsData);
   var file = saveJsonTimesheet(timesheetObj);
   var fileUrl = file.getUrl();
   // var url = DocsList.getFileById(file.getId()).getUrl();
@@ -292,72 +293,29 @@ function getWorkKeyFromNote(note, workKey) {
   return { note, workKey };
 }
 
-function createTimeSheetArray(tsData, timesheetEndOfWeek) {
+function createTimeSheetArray(timeSheetObj) {
   var rows = [];
-  var topRow = ["", "", "", "", "", "", "", "", "", "", timesheetEndOfWeek];
+  var topRow = ["", "", "", "", "", "", "", "", "", "", timeSheetObj.endOfWeek];
   var rowIdx = 0;
-  rows[rowIdx++] = topRow;
+  rows.push(topRow);
   var headerRow = ["Project", "Work", "Notes", "TotHrs", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  rows[rowIdx++] = headerRow;
-  var startDataRowNum = rowIdx + 1;
+  rows.push(headerRow);
+  var startDataRowNum = rows.length + 1;
 
-  const workKeyMap = getWorkKeyMap();
-
-  for (const endOfWeek in tsData) {
-    if (timesheetEndOfWeek != endOfWeek) {
-      continue;
-    }
-    for (const project in tsData[endOfWeek]) {
-      if (project == "personal") {
-        continue;
-      }
-      projectData = tsData[endOfWeek][project];
-      for (const workType in projectData) {
-        var colIdx = 0;
+  for (const tsRow of timeSheetObj.rows) {
         var rowCells = [];
-        rowCells[colIdx++] = project;
-          var mappedWorkType = getMapValue( workKeyMap, workType );
-          rowCells[colIdx++] = mappedWorkType == null ? workType: mappedWorkType;
-
-        var workTypeData = projectData[workType];
-        var notes = "";
-        for (const note in workTypeData.notes) {
-          if (notes.length > 0) {
-            notes = notes + "; ";
-          }
-          var noteMins = Math.round(workTypeData.notes[note]);
-          var timeStr = noteMins + "m";
-          if (noteMins > 60) {
-            var noteHrs = Math.trunc(noteMins / 60);
-            noteMins = noteMins - noteHrs * 60;
-            timeStr = noteHrs + "h " + noteMins + "m";
-          }
-          notes = notes + note + "[" + timeStr + "]";
-          if (notes.length > 400) {
-          notes = notes.substring(0,395) + "\u2026";
-         }
-        }
-        rowCells[colIdx++] = notes;
-        var totalRowHoursColIdx = colIdx++;
-        var totalRowHours = 0;
-        for (const day in workTypeData.days) {
-          var mins = workTypeData.days[day];
-          mins = applyMinBlockOfTime(mins);
-          var hrs = +(mins / 60).toFixed(2);
-          totalRowHours = totalRowHours + hrs;
-          if (hrs == 0) {
-            hrs = "";
-          }
-          rowCells[colIdx++] = hrs;
-        }
-        rowCells[totalRowHoursColIdx] = totalRowHours;
-        rows[rowIdx++] = rowCells;
-      }
-    }
+        rowCells.push(tsRow.project);
+        rowCells.push(tsRow.workType);
+        rowCells.push(tsRow.notes);
+        rowCells.push(tsRow.totalHours);
+        for (const dayHrs of tsRow.dayHours) {
+          rowCells.push(dayHrs);
+       }
+       rows.push(rowCells);
   }
   var sumColumnFormula = '=sum(INDIRECT("R' + startDataRowNum + 'C"&column()&":"&"R"&(row()-1)&"C"&column(),false))';
   var totalRowCells = ["", "", "TOTAL:", sumColumnFormula, sumColumnFormula, sumColumnFormula, sumColumnFormula, sumColumnFormula, sumColumnFormula, sumColumnFormula, sumColumnFormula];
-  rows[rowIdx++] = totalRowCells;
+  rows.push(totalRowCells);
   return rows;
 }
 
@@ -378,7 +336,8 @@ class Timesheet {
     this.rows = [];
   
   const workKeyMap = getWorkKeyMap();
-    
+  
+  var roundedOffMins = 0;
   for (const endOfWeek in tsData) {
     if (timesheetEndOfWeek != endOfWeek) {
       continue;
@@ -387,6 +346,7 @@ class Timesheet {
       if (project == "personal") {
         continue;
       }
+
       projectData = tsData[endOfWeek][project];
       for (const workType in projectData) {
         
@@ -417,15 +377,22 @@ class Timesheet {
         for (const day in workTypeData.days) {
           var mins = workTypeData.days[day];
           mins = applyMinBlockOfTime(mins);
+          roundedOffMins = roundedOffMins + (workTypeData.days[day] - mins);
           var hrs = +(mins / 60).toFixed(2);
           totalRowHours = totalRowHours + hrs;
           dayHours.push(hrs);
         }
+        
         var timesheetRow = new TimesheetRow(project, mappedWorkType, notes, totalRowHours, dayHours);
         this.rows.push(timesheetRow);
       }
     }
    }
+   var minRoundedOffMins = applyMinBlockOfTime(roundedOffMins);
+   var minRoundedOffHrs = +(minRoundedOffMins / 60).toFixed(2);
+   if (minRoundedOffHrs != 0) {
+       this.rows.push(new TimesheetRow("OVERHEAD", null, "rounded-off time", minRoundedOffHrs, [minRoundedOffHrs,0,0,0,0,0,0]));
+    }
   }
 }
 
