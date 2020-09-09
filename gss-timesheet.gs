@@ -530,21 +530,23 @@ function startTime() {
           var updated = stopTime();
           var sheet = getTimeLogSheet();
           var newRowNum = getLastStartTimeRow() + 1;
-          var newStartTimeRange = sheet.getRange("A"+newRowNum);
+          var newStartTimeRange = sheet.getRange(`A${newRowNum}`);
           if (updated) {
-              newStartTimeRange.setValue("=B"+(newRowNum-1));
+            newStartTimeRange.setValue(`=B${newRowNum-1}`);
           } else {
             recordCurrentTime(newStartTimeRange);
           }
-          var linkRange = sheet.getRange("F"+newRowNum);
-          linkRange.setValue('=if(left(E'+newRowNum+',3)="INC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fincident.do?sysparm_query=number="&E'+newRowNum+',E'+newRowNum+'),if(left(E'+newRowNum+',3)="TKT",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=ticket.do?sysparm_query=number="&E'+newRowNum+',E'+newRowNum+'),if(left(E'+newRowNum+',5)="ADHOC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fu_ad_hoc_request.do?sysparm_query=number="&E'+newRowNum+',E'+newRowNum+'),if(E'+newRowNum+'="ETS",hyperlink("http://dev-tools/gitlab/application/dev-timesheets/issues","ITR IT-INT-1"),if(E'+newRowNum+'="3-A-INC",hyperlink("http://itr.am.corp.airliquide.com/ticket/5840","5840"),if(REGEXMATCH(E'+newRowNum+',"ITR#[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/query?itr_id="&REGEXEXTRACT(E'+newRowNum+',"[0-9]+"),"ITR#"&REGEXEXTRACT(E'+newRowNum+',"[0-9]+")),if(REGEXMATCH(E'+newRowNum+',"ITR[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/ticket/"&REGEXEXTRACT(E'+newRowNum+',"[0-9]+"),"ITR"&REGEXEXTRACT(E'+newRowNum+',"[0-9]+")),"")))))))');
-          var projHrsRange = sheet.getRange("J"+newRowNum);
-          projHrsRange.setValue("=sumif(E$2:E$500, E"+newRowNum+", C$2:C$500)");
+          var linkRange = sheet.getRange(`F${newRowNum}`);
+          linkRange.setValue(`=if(left(E${newRowNum},3)="INC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fincident.do?sysparm_query=number="&E${newRowNum},E${newRowNum}),if(left(E${newRowNum},3)="TKT",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=ticket.do?sysparm_query=number="&E${newRowNum},E${newRowNum}),if(left(E${newRowNum},5)="ADHOC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fu_ad_hoc_request.do?sysparm_query=number="&E${newRowNum},E${newRowNum}),if(E${newRowNum}="ETS",hyperlink("http://dev-tools/gitlab/application/dev-timesheets/issues","ITR IT-INT-1"),if(E${newRowNum}="3-A-INC",hyperlink("http://itr.am.corp.airliquide.com/ticket/5840","5840"),if(REGEXMATCH(E${newRowNum},"ITR#[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/query?itr_id="&REGEXEXTRACT(E${newRowNum},"[0-9]+"),"ITR#"&REGEXEXTRACT(E${newRowNum},"[0-9]+")),if(REGEXMATCH(E${newRowNum},"ITR[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/ticket/"&REGEXEXTRACT(E${newRowNum},"[0-9]+"),"ITR"&REGEXEXTRACT(E${newRowNum},"[0-9]+")),"")))))))`);
+          var projHrsRange = sheet.getRange(`J${newRowNum}`);
+          projHrsRange.setValue(`=sumif(E$2:E$500, E${newRowNum}, C$2:C$500)`);
 
-          var hrsRange = sheet.getRange("C"+newRowNum);
-          hrsRange.setValue("=if(not(ISBLANK(B"+newRowNum+")),(B"+newRowNum+"-A"+newRowNum+")*24,0)");
-          var minsRange = sheet.getRange("D"+newRowNum);
-          minsRange.setValue("=if(not(ISBLANK(B"+newRowNum+")),C"+newRowNum+"*60,0)");
+          var hrsRange = sheet.getRange(`C${newRowNum}`);
+          var formula = `=if(not(ISBLANK(B${newRowNum})),(B${newRowNum}-A${newRowNum})*24,0)`;
+          hrsRange.setValue(formula);
+          var minsRange = sheet.getRange(`D${newRowNum}`);
+          var formula = `=if(not(ISBLANK(B${newRowNum})),C${newRowNum}*60,0)`;
+          minsRange.setValue(formula);
 }
 
 function stopTime() {
