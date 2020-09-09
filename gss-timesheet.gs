@@ -343,7 +343,7 @@ class Timesheet {
       continue;
     }
     for (const project in tsData[endOfWeek]) {
-      if (project == "personal") {
+      if (project.toUpperCase() == "personal".toUpperCase()) {
         continue;
       }
 
@@ -560,7 +560,7 @@ function stopTime() {
 function recordCurrentTime(cell) {
           var updated = false;          
           if (cell.isBlank()) {
-          cell.setValue(new Date()).setNumberFormat('ddd mmm d h:mmp');
+          cell.setValue(new Date()).setNumberFormat('ddd mmm d h:mma/p');
           updated=true;
          }
           return updated;
