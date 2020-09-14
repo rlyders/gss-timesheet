@@ -22,7 +22,7 @@ function getMapValue(aMap, aKey) {
   } else return null;
 }
 
-function addToGroup(tsData, sEndOfWeek, aProjectKey, aWorkKey, aNote, aDayOfWeekNum, aMins) {
+function addToGroup(tsData, sEndOfWeek, aBillProjectKey, aProjectKey, aWorkKey, aNote, aDayOfWeekNum, aMins) {
 
   weekData = getMapValue(tsData, sEndOfWeek);
   if (weekData == null) {
@@ -30,12 +30,18 @@ function addToGroup(tsData, sEndOfWeek, aProjectKey, aWorkKey, aNote, aDayOfWeek
     tsData[sEndOfWeek] = weekData;
   }
 
-  projectData = getMapValue(weekData, aProjectKey);
-  if (projectData == null) {
-    projectData = {};
-    weekData[aProjectKey] = projectData;
+  billProjectData = getMapValue(weekData, aBillProjectKey);
+  if (billProjectData == null) {
+    billProjectData = {};
+    weekData[aBillProjectKey] = billProjectData;
   }
 
+  projectData = getMapValue(billProjectData, aProjectKey);
+  if (projectData == null) {
+    projectData = {};
+    billProjectData[aProjectKey] = projectData;
+  }
+  
   workData = getMapValue(projectData, aWorkKey);
   if (workData == null) {
     workData = { notes: {}, days: Array(7).fill(0) };
@@ -110,13 +116,13 @@ function getWeekEndOnSunday(aDate) {
   return sunday;
 }
 
-function addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount) {
+function addWorkTime(tsData, billProject, project, workKey, notes, startTime, endTime, discount) {
   var startDay = startTime.getDay();
   var endDay = endTime.getDay();
   if (startDay != endDay) {
     var newStartTime = new Date(endTime);
     newStartTime.setHours(0, 0, 0, 0);
-    addWorkTime(tsData, project, workKey, notes, newStartTime, endTime, discount);
+    addWorkTime(tsData, billProject, project, workKey, notes, newStartTime, endTime, discount);
 
     endTime = new Date(startTime);
     endTime.setHours(23, 59, 59, 999)
@@ -126,7 +132,7 @@ function addWorkTime(tsData, project, workKey, notes, startTime, endTime, discou
     millis = millis * (1 - discount);
   }
   var mins = (millis / 1000) / 60;
-  addToGroup(tsData, getWeekEndOnSunday(startTime), project, workKey, notes, startTime.getDay() || 7, mins);
+  addToGroup(tsData, getWeekEndOnSunday(startTime), billProject, project, workKey, notes, startTime.getDay() || 7, mins);
 }
 
 function createTimesheet() {
@@ -154,27 +160,34 @@ function createTimesheet() {
   var startTimeColNum = 1;
   var stopTimeColNum = 2;
   var projectColNum = 5;
-  var workTypeColNum = 7;
-  var notesColNum = 9;
-  var notesColNum = 9;
-  var discountColNum = 17;
+  var billProjectColNum = 6;
+  var workTypeColNum = 8;
+  var notesColNum = 10;
+  var discountColNum = 11;
   var trimAfterSpaceInProject = false;
   
   for (r = 0; r < lastRow - 1; r++) {
+    var startTime = rangeValues[r][startTimeColNum-1];
+    var endTime = rangeValues[r][stopTimeColNum-1];
+    if (startTime.length == 0 || endTime.length == 0) {
+      continue;
+    }
+
     var project = rangeValues[r][projectColNum-1];
+    var billProject = rangeValues[r][billProjectColNum-1];
+    
+    var workKey = rangeValues[r][workTypeColNum-1];
+    var notes = rangeValues[r][notesColNum-1];
+    var discount = rangeValues[r][discountColNum-1];
+
     if (trimAfterSpaceInProject) {
      var spaceInProject = project.indexOf(' ');
      if (spaceInProject > 0) {
        project = project.substring(0, spaceInProject);
      }
     }
-    var workKey = rangeValues[r][workTypeColNum-1];
-    var notes = rangeValues[r][notesColNum-1];
-    var startTime = rangeValues[r][startTimeColNum-1];
-    var endTime = rangeValues[r][stopTimeColNum-1];
-    var discount = rangeValues[r][discountColNum-1];
-
-    addWorkTime(tsData, project, workKey, notes, startTime, endTime, discount);
+    
+    addWorkTime(tsData, billProject, project, workKey, notes, startTime, endTime, discount);
   };
 
   var timesheetObj =  new Timesheet(timesheetEndOfWeek, tsData);
@@ -236,7 +249,8 @@ function createTimesheet() {
 
   var urlRange = timeSheet.getRange("B1");
   urlRange.setValue(fileUrl);
- 
+    
+  ss.setActiveSheet(ss.getSheetByName("timesheet"));
 };
 
 // from: https://stackoverflow.com/a/33813783/5572674
@@ -342,23 +356,43 @@ class Timesheet {
     if (timesheetEndOfWeek != endOfWeek) {
       continue;
     }
-    for (const project in tsData[endOfWeek]) {
-      if (project.toUpperCase() == "personal".toUpperCase()) {
+          
+    for (const billProject in tsData[endOfWeek]) {
+      if (billProject.toLowerCase() == "personal") {
         continue;
       }
 
-      projectData = tsData[endOfWeek][project];
+    billProjectData = tsData[endOfWeek][billProject];
+    for (const project in billProjectData) {
+      if (project.toLowerCase() == "personal") {
+        continue;
+      }
+
+      projectData = billProjectData[project];
       for (const workType in projectData) {
         
         var mappedWorkType = getMapValue( workKeyMap, workType );
         mappedWorkType = mappedWorkType == null ? workType: mappedWorkType;
 
         var workTypeData = projectData[mappedWorkType];
+  
+        var notePrefix = "";
+        if (billProject != project)  {
+          var prefixDelimiter = (project.length > 0 && mappedWorkType.length > 0) ? ":" : "";
+          notePrefix = `[${project}${prefixDelimiter}${mappedWorkType}] `;
+          mappedWorkType = "";
+        } else if (billProject == "OVERHEAD" && mappedWorkType.length > 0) {
+          notePrefix = `[${mappedWorkType}] `;
+          mappedWorkType = "";
+        }
+  
         var notes = "";
         for (const note in workTypeData.notes) {
-          if (notes.length > 0) {
-            notes = notes + "; ";
-          }
+          if (notes.length == 0) {
+          notes = notePrefix;
+         } else {
+           notes = notes + "; ";
+         }
           var noteMins = Math.round(workTypeData.notes[note]);
           var timeStr = noteMins + "m";
           if (noteMins > 60) {
@@ -366,7 +400,7 @@ class Timesheet {
             noteMins = noteMins - noteHrs * 60;
             timeStr = noteHrs + "h " + noteMins + "m";
           }
-          notes = notes + note + "[" + timeStr + "]";
+          notes = notes + note + "{" + timeStr + "}";
           if (notes.length > 400) {
           notes = notes.substring(0,395) + "\u2026";
          }
@@ -383,15 +417,18 @@ class Timesheet {
           dayHours.push(hrs);
         }
         
-        var timesheetRow = new TimesheetRow(project, mappedWorkType, notes, totalRowHours, dayHours);
+        var timesheetRow = new TimesheetRow(billProject, mappedWorkType, notes, totalRowHours, dayHours);
         this.rows.push(timesheetRow);
       }
     }
+    }
    }
+   
+   this.rows.sort((a, b) => (a.project+':'+a.workType > b.project+':'+b.workType) ? 1 : -1)
    var minRoundedOffMins = applyMinBlockOfTime(roundedOffMins);
    var minRoundedOffHrs = +(minRoundedOffMins / 60).toFixed(2);
    if (minRoundedOffHrs != 0) {
-       this.rows.push(new TimesheetRow("OVERHEAD", null, "rounded-off time", minRoundedOffHrs, [minRoundedOffHrs,0,0,0,0,0,0]));
+       this.rows.push(new TimesheetRow("OVERHEAD", null, "balance of rounded-off time", minRoundedOffHrs, [minRoundedOffHrs,0,0,0,0,0,0]));
     }
   }
 }
@@ -406,12 +443,13 @@ function test() {
   var tsData = {};
 
   var project = "ITR6017 Consignments>EBS";
+  var billProject = "ITR 6017";
   var note = "dep int";
   var noteAndWorkKey = getWorkKeyFromNote(note);
   var startTime = new Date("2020-04-27T10:05:40.622Z");
   var endTime = new Date("2020-04-27T11:59:57.318Z");
   var discount = 0;
-  addWorkTime(tsData, project, noteAndWorkKey.workKey, noteAndWorkKey.note, startTime, endTime, discount);
+  addWorkTime(tsData, billProject, project, noteAndWorkKey.workKey, noteAndWorkKey.note, startTime, endTime, discount);
 
   //   project = "ITR6017 Consignments>EBS";
   //   note = "test int";
@@ -538,8 +576,6 @@ function startTime() {
           }
           var linkRange = sheet.getRange(`F${newRowNum}`);
           linkRange.setValue(`=if(left(E${newRowNum},3)="INC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fincident.do?sysparm_query=number="&E${newRowNum},E${newRowNum}),if(left(E${newRowNum},3)="TKT",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=ticket.do?sysparm_query=number="&E${newRowNum},E${newRowNum}),if(left(E${newRowNum},5)="ADHOC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fu_ad_hoc_request.do?sysparm_query=number="&E${newRowNum},E${newRowNum}),if(E${newRowNum}="ETS",hyperlink("http://dev-tools/gitlab/application/dev-timesheets/issues","ITR IT-INT-1"),if(E${newRowNum}="3-A-INC",hyperlink("http://itr.am.corp.airliquide.com/ticket/5840","5840"),if(REGEXMATCH(E${newRowNum},"ITR#[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/query?itr_id="&REGEXEXTRACT(E${newRowNum},"[0-9]+"),"ITR#"&REGEXEXTRACT(E${newRowNum},"[0-9]+")),if(REGEXMATCH(E${newRowNum},"ITR[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/ticket/"&REGEXEXTRACT(E${newRowNum},"[0-9]+"),"ITR"&REGEXEXTRACT(E${newRowNum},"[0-9]+")),"")))))))`);
-          var projHrsRange = sheet.getRange(`J${newRowNum}`);
-          projHrsRange.setValue(`=sumif(E$2:E$500, E${newRowNum}, C$2:C$500)`);
 
           var hrsRange = sheet.getRange(`C${newRowNum}`);
           var formula = `=if(not(ISBLANK(B${newRowNum})),(B${newRowNum}-A${newRowNum})*24,0)`;
@@ -547,6 +583,15 @@ function startTime() {
           var minsRange = sheet.getRange(`D${newRowNum}`);
           var formula = `=if(not(ISBLANK(B${newRowNum})),C${newRowNum}*60,0)`;
           minsRange.setValue(formula);
+  
+          sheet.getRange(`K${newRowNum}`).setValue(`=if(lower(E${newRowNum})="personal",0,if(isblank(J${newRowNum}),C${newRowNum},C${newRowNum}*(1-J${newRowNum})))`);
+          sheet.getRange(`L${newRowNum}`).setValue(`=sumif(E$2:E, E${newRowNum}, K$2:K)`);
+          sheet.getRange(`M${newRowNum}`).setValue(`=if(isna(vlookup($E${newRowNum}, Projects!A:I,1, false)),"",vlookup($E${newRowNum}, Projects!A:I,1,false))`);
+          sheet.getRange(`N${newRowNum}`).setValue(`=if(or($E${newRowNum}="OVERHEAD",len(M${newRowNum})=0),0,vlookup($E${newRowNum}, Projects!A:I,9,false))`);
+          sheet.getRange(`O${newRowNum}`).setValue(`=if(or($E${newRowNum}="OVERHEAD",len(M${newRowNum})=0),0,N${newRowNum}+L${newRowNum})`);
+          sheet.getRange(`P${newRowNum}`).setValue(`=if(or($E${newRowNum}="OVERHEAD",len(M${newRowNum})=0),0,vlookup($E${newRowNum}, Projects!A:I,8,false))`);
+          sheet.getRange(`Q${newRowNum}`).setValue(`=if(or($E${newRowNum}="OVERHEAD",len(M${newRowNum})=0,P${newRowNum}=0),"",P${newRowNum}-O${newRowNum})`);
+          sheet.getRange(`S${newRowNum}`).setValue(`=if(TO_DATE(INT(A${newRowNum}))=today(),C${newRowNum},0)`);
 }
 
 function stopTime() {
