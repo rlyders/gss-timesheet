@@ -22,7 +22,8 @@ const logCols = {
     PROJ_HRS_TOT: 'O',
     PROJ_EST_HRS: 'P',
     PROJ_HRS_LEFT: 'Q',
-    TODAY_HRS: 'S'
+    TODAY_HRS: 'S',
+    PROJ_HRS_TODAY: 'U'
 }
 
 function hashSearch(array, searchText) {
@@ -600,13 +601,13 @@ function startTime() {
     recordCurrentTime(newStartTimeRange);
     }
     
-    // orig:                                       =(if(ISBLANK(B2                 ),now(),B2                 )-A2                  )*24
-    sheet.getRange(`${logCols.HRS}${r}`).setValue(`=(if(ISBLANK(${logCols.STOP}${r}),now(),${logCols.STOP}${r})-${logCols.START}${r})*24`);
+    // orig:                                       =if(ISBLANK(A               2   ),0,(if(ISBLANK(B              2   ),now(),B              2   )-A               2   )*24)
+    sheet.getRange(`${logCols.HRS}${r}`).setValue(`=if(ISBLANK(${logCols.START}${r}),0,(if(ISBLANK(${logCols.STOP}${r}),now(),${logCols.STOP}${r})-${logCols.START}${r})*24)`);
     
-    // orig:                                        =C2                *60
+    // orig:                                        =C             2   *60
     sheet.getRange(`${logCols.MINS}${r}`).setValue(`=${logCols.HRS}${r}*60`);
 
-    // orig:                                                =if(ISBLANK(E2                    ),"OVERHEAD", if(vlookup(E2                    ,Projects!A$2:A,1,true)=E2                    ,E2                    ,"OVERHEAD"))
+    // orig:                                                =if(ISBLANK(E                 2   ),"OVERHEAD", if(vlookup(E                 2   ,Projects!A$2:A,1,true)=E                 2   ,E                 2   ,"OVERHEAD"))
     sheet.getRange(`${logCols.BILL_PROJECT}${r}`).setValue(`=if(ISBLANK(${logCols.PROJECT}${r}),"OVERHEAD", if(vlookup(${logCols.PROJECT}${r},Projects!A$2:A,1,true)=${logCols.PROJECT}${r},${logCols.PROJECT}${r},"OVERHEAD"))`);
     
     sheet.getRange(`${logCols.LINK}${r}`).setValue(`=if(left(${logCols.BILL_PROJECT}${r},3)="INC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fincident.do?sysparm_query=number="&${logCols.BILL_PROJECT}${r},${logCols.BILL_PROJECT}${r}),if(left(${logCols.BILL_PROJECT}${r},3)="TKT",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=ticket.do?sysparm_query=number="&${logCols.BILL_PROJECT}${r},${logCols.BILL_PROJECT}${r}),if(left(${logCols.BILL_PROJECT}${r},5)="ADHOC",hyperlink("https://airliquide.service-now.com/nav_to.do?uri=%2Fu_ad_hoc_request.do?sysparm_query=number="&${logCols.BILL_PROJECT}${r},${logCols.BILL_PROJECT}${r}),if(${logCols.BILL_PROJECT}${r}="ETS",hyperlink("http://dev-tools/gitlab/application/dev-timesheets/issues","ITR IT-INT-1"),if(${logCols.BILL_PROJECT}${r}="3-A-INC",hyperlink("http://itr.am.corp.airliquide.com/ticket/5840","5840"),if(REGEXMATCH(${logCols.BILL_PROJECT}${r},"ITR#[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/query?itr_id="&REGEXEXTRACT(${logCols.BILL_PROJECT}${r},"[0-9]+"),"ITR#"&REGEXEXTRACT(${logCols.BILL_PROJECT}${r},"[0-9]+")),if(REGEXMATCH(${logCols.BILL_PROJECT}${r},"ITR[0-9]*"),hyperlink("http://itr.am.corp.airliquide.com/ticket/"&REGEXEXTRACT(${logCols.BILL_PROJECT}${r},"[0-9]+"),"ITR"&REGEXEXTRACT(${logCols.BILL_PROJECT}${r},"[0-9]+")),"")))))))`);
@@ -614,8 +615,8 @@ function startTime() {
     // orig:                                            =if(lower(E2                    )="personal",0,if(isblank(K2                     ),C2                ,C2                *(1-K2                     )))
     sheet.getRange(`${logCols.BILL_HRS}${r}`).setValue(`=if(lower(${logCols.PROJECT}${r})="personal",0,if(isblank(${logCols.DISCOUNT}${r}),${logCols.HRS}${r},${logCols.HRS}${r}*(1-${logCols.DISCOUNT}${r})))`);
 
-    // orig:                                               =sumif(E$2:E, E2, L$2:L)
-    sheet.getRange(`${logCols.PROJ_HRS_WK}${r}`).setValue(`=sumif(${logCols.PROJECT}2:${logCols.PROJECT}, ${logCols.PROJECT}${r}, ${logCols.BILL_HRS}$2:${logCols.BILL_HRS})`);
+    // orig:                                               =sumif(E                 $2:E                 , E2                    , L                  $2:L)
+    sheet.getRange(`${logCols.PROJ_HRS_WK}${r}`).setValue(`=sumif(${logCols.PROJECT}$2:${logCols.PROJECT}, ${logCols.PROJECT}${r}, ${logCols.BILL_HRS}$2:${logCols.BILL_HRS})`);
 
     // orig:                                                  =if(F2                         ="OVERHEAD",0,vlookup(F2                         , Projects!A:I,9,false))
     sheet.getRange(`${logCols.PROJ_HRS_PRIOR}${r}`).setValue(`=if(${logCols.BILL_PROJECT}${r}="OVERHEAD",0,vlookup(${logCols.BILL_PROJECT}${r}, Projects!A:I,9,false))`);
@@ -631,6 +632,10 @@ function startTime() {
 
     // orig:                                             =if(TO_DATE(INT(A2                  ))=today(),C2                ,0)
     sheet.getRange(`${logCols.TODAY_HRS}${r}`).setValue(`=if(TO_DATE(INT(${logCols.START}${r}))=today(),${logCols.HRS}${r},0)`);
+  
+    // orig:                                                  =sumif(E                 $2:E                 , E                 2   , S                   $2:S)
+    sheet.getRange(`${logCols.PROJ_HRS_TODAY}${r}`).setValue(`=sumif(${logCols.PROJECT}$2:${logCols.PROJECT}, ${logCols.PROJECT}${r}, ${logCols.TODAY_HRS}$2:${logCols.TODAY_HRS})`);
+  
 }
 
 function stopTime() {
